@@ -1,6 +1,7 @@
 package org.obolibrary.robot;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -947,6 +948,233 @@ public class ExportOperation {
                     includeAnonymous));
           }
           continue;
+        case "ANNOTATIONS":
+          Collection<OWLAnnotation> annos = EntitySearcher.getAnnotations(entity, ontology);
+          row.add(
+              getObjectCell(
+                  annos,
+                  col,
+                  displayRendererType,
+                  sortRendererType,
+                  provider,
+                  includeNamed,
+                  includeAnonymous));
+          continue;
+        case "DISJOINT CLASSES":
+          if (entity.isOWLClass()) {
+            OWLClass clz = entity.asOWLClass();
+            Collection<OWLClassExpression> disj = EntitySearcher.getDisjointClasses(clz, ontology);
+            // remove self disjoint
+            disj.remove(clz);
+            row.add(
+                getObjectCell(
+                    disj,
+                    col,
+                    displayRendererType,
+                    sortRendererType,
+                    provider,
+                    includeNamed,
+                    includeAnonymous));
+          }
+          continue;
+        case "DISJOINT PROPERTIES":
+          if (entity.isOWLObjectProperty()) {
+            OWLObjectProperty op = entity.asOWLObjectProperty();
+            Collection<OWLObjectPropertyExpression> disj =
+                EntitySearcher.getDisjointProperties(op, ontology);
+            // remove self disjoint
+            disj.remove(op);
+            row.add(
+                getObjectCell(
+                    disj,
+                    col,
+                    displayRendererType,
+                    sortRendererType,
+                    provider,
+                    includeNamed,
+                    includeAnonymous));
+          } else {
+            if (entity.isOWLDataProperty()) {
+              OWLDataProperty dp = entity.asOWLDataProperty();
+              Collection<OWLDataPropertyExpression> disj =
+                  EntitySearcher.getDisjointProperties(dp, ontology);
+              // remove self disjoint
+              disj.remove(dp);
+              row.add(
+                  getObjectCell(
+                      disj,
+                      col,
+                      displayRendererType,
+                      sortRendererType,
+                      provider,
+                      includeNamed,
+                      includeAnonymous));
+            }
+          }
+          continue;
+        case "INVERSE PROPERTY":
+          if (entity.isOWLObjectProperty()) {
+            OWLObjectProperty op = entity.asOWLObjectProperty();
+            Collection<OWLObjectPropertyExpression> invs = EntitySearcher.getInverses(op, ontology);
+            row.add(
+                getObjectCell(
+                    invs,
+                    col,
+                    displayRendererType,
+                    sortRendererType,
+                    provider,
+                    includeNamed,
+                    includeAnonymous));
+          }
+          continue;
+        case "CHARACTERISTICS":
+          List<String> chars = new ArrayList<String>();
+          if (entity.isOWLObjectProperty()) {
+            OWLObjectProperty op = entity.asOWLObjectProperty();
+            if (EntitySearcher.isFunctional(op, ontology)) {
+              chars.add("functional");
+            }
+            if (EntitySearcher.isAsymmetric(op, ontology)) {
+              chars.add("asymmetric");
+            }
+            if (EntitySearcher.isInverseFunctional(op, ontology)) {
+              chars.add("inverse functional");
+            }
+            if (EntitySearcher.isIrreflexive(op, ontology)) {
+              chars.add("irreflexive");
+            }
+            if (EntitySearcher.isReflexive(op, ontology)) {
+              chars.add("reflexive");
+            }
+            if (EntitySearcher.isSymmetric(op, ontology)) {
+              chars.add("symmetric");
+            }
+            if (EntitySearcher.isTransitive(op, ontology)) {
+              chars.add("transitive");
+            }
+          } else if (entity.isOWLDataProperty()) {
+            if (EntitySearcher.isFunctional(entity.asOWLDataProperty(), ontology)) {
+              chars.add("functional");
+            }
+          }
+          String pipedChars = String.join("|", chars);
+          row.add(new Cell(col, pipedChars));
+          continue;
+        case "INSTANCE TYPES":
+          if (entity.isOWLNamedIndividual()) {
+            OWLNamedIndividual inst = entity.asOWLNamedIndividual();
+            Collection<OWLClassExpression> types = EntitySearcher.getTypes(inst, ontology);
+            row.add(
+                getObjectCell(
+                    types,
+                    col,
+                    displayRendererType,
+                    sortRendererType,
+                    provider,
+                    includeNamed,
+                    includeAnonymous));
+            continue;
+
+          } else if (entity.isIndividual() && entity.isAnonymous()) {
+            // not supported
+          }
+          continue;
+        case "INSTANCE FACTS":
+          if (entity.isOWLNamedIndividual()) {
+            OWLNamedIndividual inst = entity.asOWLNamedIndividual();
+
+            Multimap<OWLObjectPropertyExpression, OWLIndividual> opvs =
+                EntitySearcher.getObjectPropertyValues(inst, ontology);
+            Multimap<OWLDataPropertyExpression, OWLLiteral> dpvs =
+                EntitySearcher.getDataPropertyValues(inst, ontology);
+            Collection<? extends OWLObject> pas = new ArrayList<OWLObject>();
+
+            for (OWLObjectPropertyExpression ope : opvs.keySet()) {
+
+              Collection<OWLIndividual> objects = opvs.get(ope);
+
+              List<String> objString =
+                  owlObjectsToString(
+                      sortRendererType, provider, objects, includeAnonymous, includeAnonymous);
+              List<OWLObjectPropertyExpression> zz = new ArrayList<OWLObjectPropertyExpression>();
+              zz.add(ope);
+              List<String> opeString =
+                  owlObjectsToString(
+                      sortRendererType, provider, zz, includeAnonymous, includeAnonymous);
+              System.out.println(opeString + "\t" + objString);
+              // manchester of ope objects
+            }
+
+            // TODO
+            for (OWLDataPropertyExpression dpe : dpvs.keySet()) {
+              OWLDataProperty dp = dpe.asOWLDataProperty();
+              List<String> dpv =
+                  getPropertyValues(
+                      ontology,
+                      sortRendererType,
+                      provider,
+                      entity,
+                      dp,
+                      includeAnonymous,
+                      includeAnonymous);
+              Collection<OWLLiteral> obj = dpvs.get(dpe);
+            }
+
+            row.add(
+                getObjectCell(
+                    pas,
+                    col,
+                    displayRendererType,
+                    sortRendererType,
+                    provider,
+                    includeNamed,
+                    includeAnonymous));
+            continue;
+          } else if (entity.isIndividual() && entity.isAnonymous()) {
+            // Anonymous individuals not supported
+          }
+          continue;
+
+        case "SAME INDIVIDUAL":
+          if (entity.isOWLNamedIndividual()) {
+            OWLNamedIndividual inst = entity.asOWLNamedIndividual();
+            Collection<OWLIndividual> sames = EntitySearcher.getSameIndividuals(inst, ontology);
+            row.add(
+                getObjectCell(
+                    sames,
+                    col,
+                    displayRendererType,
+                    sortRendererType,
+                    provider,
+                    includeNamed,
+                    includeAnonymous));
+          } else if (entity.isIndividual() && entity.isAnonymous()) {
+            // not supported
+          }
+          continue;
+        case "DIFFERENT INDIVIDUAL":
+          if (entity.isOWLNamedIndividual()) {
+            OWLNamedIndividual inst = entity.asOWLNamedIndividual();
+            Collection<OWLIndividual> diffs =
+                EntitySearcher.getDifferentIndividuals(inst, ontology);
+            // remove self-different
+            diffs.remove(inst);
+            row.add(
+                getObjectCell(
+                    diffs,
+                    col,
+                    displayRendererType,
+                    sortRendererType,
+                    provider,
+                    includeNamed,
+                    includeAnonymous));
+          } else if (entity.isIndividual() && entity.isAnonymous()) {
+            // not supported
+          }
+          continue;
+        case "ENTITY TYPE":
+          row.add(getEntityTypeCell(entity.getEntityType(), col));
+          continue;
       }
 
       // If a property exists, use this property to get values
@@ -1180,7 +1408,7 @@ public class ExportOperation {
           } else if (entity.isOWLObjectProperty()) {
             Collection<OWLObjectPropertyExpression> disjoints =
                 EntitySearcher.getDisjointProperties(entity.asOWLObjectProperty(), ontology);
-          // remove self-disjoint
+            // remove self-disjoint
             disjoints.remove(entity.asOWLObjectProperty());
             row.add(
                 getObjectCell(
